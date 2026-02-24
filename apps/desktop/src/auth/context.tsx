@@ -65,6 +65,28 @@ export type AuthContextType = AuthState &
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const MOCK_SESSION: Session = {
+  access_token: "mock-access-token",
+  refresh_token: "mock-refresh-token",
+  token_type: "bearer",
+  expires_in: 3600,
+  expires_at: Math.floor(Date.now() / 1000) + 3600 * 24 * 365,
+  user: {
+    id: "00000000-0000-0000-0000-000000000000",
+    aud: "authenticated",
+    role: "authenticated",
+    email: "local@localhost",
+    email_confirmed_at: new Date().toISOString(),
+    phone: "",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    app_metadata: {},
+    user_metadata: {},
+    identities: [],
+    factors: [],
+  },
+};
+
 export function useAuth() {
   const context = useContext(AuthContext);
 
@@ -197,6 +219,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!supabase) {
+      console.log("[auth] Supabase not configured, using mock session");
+      setSession(MOCK_SESSION);
       return;
     }
 
