@@ -1,0 +1,199 @@
+diff --git a/crates/owhisper-client/src/adapter/openai/live.rs b/crates/owhisper-client/src/adapter/openai/live.rs
+index 064b74591..de90d84be 100644
+--- a/crates/owhisper-client/src/adapter/openai/live.rs
++++ b/crates/owhisper-client/src/adapter/openai/live.rs
+@@ -29,8 +29,9 @@ impl RealtimeSttAdapter for OpenAIAdapter {
+         false
+     }
+ 
+-    fn build_ws_url(&self, api_base: &str, _params: &ListenParams, _channels: u8) -> url::Url {
+-        let (mut url, existing_params) = Self::build_ws_url_from_base(api_base);
++    fn build_ws_url(&self, api_base: &str, params: &ListenParams, _channels: u8) -> url::Url {
++        let model = params.model.as_deref();
++        let (mut url, existing_params) = Self::build_ws_url_from_base_with_model(api_base, model);
+ 
+         if !existing_params.is_empty() {
+             let mut query_pairs = url.query_pairs_mut();
+diff --git a/crates/owhisper-client/src/adapter/openai/mod.rs b/crates/owhisper-client/src/adapter/openai/mod.rs
+index 7dd67158f..3cf937e9e 100644
+--- a/crates/owhisper-client/src/adapter/openai/mod.rs
++++ b/crates/owhisper-client/src/adapter/openai/mod.rs
+@@ -5,6 +5,8 @@ use crate::providers::Provider;
+ 
+ use super::{LanguageQuality, LanguageSupport};
+ 
++const AZURE_API_VERSION: &str = "2025-04-01-preview";
++
+ #[derive(Clone, Default)]
+ pub struct OpenAIAdapter;
+ 
+@@ -27,7 +29,18 @@ impl OpenAIAdapter {
+         Self::language_support_batch(languages).is_supported()
+     }
+ 
++    pub fn is_azure_host(host: &str) -> bool {
++        host.ends_with(".openai.azure.com")
++    }
++
+     pub(crate) fn build_ws_url_from_base(api_base: &str) -> (url::Url, Vec<(String, String)>) {
++        Self::build_ws_url_from_base_with_model(api_base, None)
++    }
++
++    pub(crate) fn build_ws_url_from_base_with_model(
++        api_base: &str,
++        model: Option<&str>,
++    ) -> (url::Url, Vec<(String, String)>) {
+         if api_base.is_empty() {
+             return (
+                 Provider::OpenAI
+@@ -43,15 +56,20 @@ impl OpenAIAdapter {
+         }
+ 
+         let parsed: url::Url = api_base.parse().expect("invalid_api_base");
++        let host = parsed
++            .host_str()
++            .unwrap_or(Provider::OpenAI.default_ws_host());
++
++        if Self::is_azure_host(host) {
++            return Self::build_azure_ws_url(&parsed, host, model);
++        }
++
+         let mut existing_params = super::extract_query_params(&parsed);
+ 
+         if !existing_params.iter().any(|(k, _)| k == "intent") {
+             existing_params.push(("intent".to_string(), "transcription".to_string()));
+         }
+ 
+-        let host = parsed
+-            .host_str()
+-            .unwrap_or(Provider::OpenAI.default_ws_host());
+         let mut url: url::Url = format!("wss://{}{}", host, Provider::OpenAI.ws_path())
+             .parse()
+             .expect("invalid_ws_url");
+@@ -60,6 +78,40 @@ impl OpenAIAdapter {
+ 
+         (url, existing_params)
+     }
++
++    fn build_azure_ws_url(
++        parsed: &url::Url,
++        host: &str,
++        model: Option<&str>,
++    ) -> (url::Url, Vec<(String, String)>) {
++        let existing_params = super::extract_query_params(parsed);
++
++        let deployment = model
++            .or_else(|| {
++                existing_params
++                    .iter()
++                    .find(|(k, _)| k == "deployment")
++                    .map(|(_, v)| v.as_str())
++            })
++            .unwrap_or(Provider::OpenAI.default_live_model());
++
++        let mut url: url::Url = format!("wss://{}/openai/realtime", host)
++            .parse()
++            .expect("invalid_azure_ws_url");
++
++        let mut params = vec![
++            ("api-version".to_string(), AZURE_API_VERSION.to_string()),
++            ("deployment".to_string(), deployment.to_string()),
++        ];
++
++        for (k, v) in &existing_params {
++            if k != "api-version" && k != "deployment" {
++                params.push((k.clone(), v.clone()));
++            }
++        }
++
++        (url, params)
++    }
+ }
+ 
+ #[cfg(test)]
+@@ -98,4 +150,56 @@ mod tests {
+         assert!(Provider::OpenAI.is_host("openai.com"));
+         assert!(!Provider::OpenAI.is_host("api.deepgram.com"));
+     }
++
++    #[test]
++    fn test_is_azure_host() {
++        assert!(OpenAIAdapter::is_azure_host("my-resource.openai.azure.com"));
++        assert!(OpenAIAdapter::is_azure_host("eastus.openai.azure.com"));
++        assert!(!OpenAIAdapter::is_azure_host("api.openai.com"));
++        assert!(!OpenAIAdapter::is_azure_host("openai.com"));
++        assert!(!OpenAIAdapter::is_azure_host("azure.com"));
++    }
++
++    #[test]
++    fn test_build_ws_url_azure() {
++        let (url, params) = OpenAIAdapter::build_ws_url_from_base_with_model(
++            "https://my-resource.openai.azure.com",
++            Some("gpt-4o-realtime-preview"),
++        );
++        assert_eq!(
++            url.as_str(),
++            "wss://my-resource.openai.azure.com/openai/realtime"
++        );
++        assert!(params.iter().any(|(k, v)| k == "api-version"
++            && v == "2025-04-01-preview"));
++        assert!(params.iter().any(|(k, v)| k == "deployment"
++            && v == "gpt-4o-realtime-preview"));
++    }
++
++    #[test]
++    fn test_build_ws_url_azure_with_deployment_in_query() {
++        let (url, params) = OpenAIAdapter::build_ws_url_from_base_with_model(
++            "https://my-resource.openai.azure.com?deployment=my-deployment",
++            None,
++        );
++        assert_eq!(
++            url.as_str(),
++            "wss://my-resource.openai.azure.com/openai/realtime"
++        );
++        assert!(params.iter().any(|(k, v)| k == "deployment" && v == "my-deployment"));
++    }
++
++    #[test]
++    fn test_build_ws_url_azure_model_overrides_query() {
++        let (url, params) = OpenAIAdapter::build_ws_url_from_base_with_model(
++            "https://my-resource.openai.azure.com?deployment=old-deployment",
++            Some("new-deployment"),
++        );
++        assert_eq!(
++            url.as_str(),
++            "wss://my-resource.openai.azure.com/openai/realtime"
++        );
++        assert!(params.iter().any(|(k, v)| k == "deployment" && v == "new-deployment"));
++        assert!(!params.iter().any(|(k, v)| k == "deployment" && v == "old-deployment"));
++    }
+ }
+diff --git a/crates/owhisper-client/src/lib.rs b/crates/owhisper-client/src/lib.rs
+index 34b8e0fba..e3f368097 100644
+--- a/crates/owhisper-client/src/lib.rs
++++ b/crates/owhisper-client/src/lib.rs
+@@ -24,6 +24,13 @@ pub use adapter::{
+     documented_language_codes_batch, documented_language_codes_live, is_hyprnote_proxy,
+     is_local_host, normalize_languages,
+ };
++
++fn is_azure_openai(api_base: &str) -> bool {
++    url::Url::parse(api_base)
++        .ok()
++        .and_then(|u| u.host_str().map(OpenAIAdapter::is_azure_host))
++        .unwrap_or(false)
++}
+ #[cfg(feature = "argmax")]
+ pub use adapter::{StreamingBatchConfig, StreamingBatchEvent, StreamingBatchStream};
+ 
+@@ -116,6 +123,10 @@ impl<A: RealtimeSttAdapter> ListenClientBuilder<A> {
+             for (name, value) in &self.extra_headers {
+                 request = request.with_header(name, value);
+             }
++        } else if is_azure_openai(original_api_base) {
++            if let Some(api_key) = self.api_key.as_deref() {
++                request = request.with_header("api-key", api_key);
++            }
+         } else if let Some((header_name, header_value)) =
+             adapter.build_auth_header(self.api_key.as_deref())
+         {
