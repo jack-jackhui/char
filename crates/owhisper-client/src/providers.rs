@@ -392,7 +392,7 @@ impl Provider {
             Self::AssemblyAI => from_adapter(&crate::adapter::AssemblyAIAdapter, msg),
             Self::Soniox => from_adapter(&crate::adapter::SonioxAdapter, msg),
             Self::Fireworks => from_adapter(&crate::adapter::FireworksAdapter, msg),
-            Self::OpenAI => from_adapter(&crate::adapter::OpenAIAdapter, msg),
+            Self::OpenAI => from_adapter(&crate::adapter::OpenAIAdapter::default(), msg),
             Self::Gladia => from_adapter(&crate::adapter::GladiaAdapter, msg),
             Self::ElevenLabs => from_adapter(&crate::adapter::ElevenLabsAdapter, msg),
             Self::DashScope => from_adapter(&crate::adapter::DashScopeAdapter, msg),
