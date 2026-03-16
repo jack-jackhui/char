@@ -44,7 +44,7 @@ async fn ensure_parent_dirs(path: &Path) -> CliResult<()> {
     Ok(())
 }
 
-async fn write_bytes_to(output: Option<&Path>, bytes: Vec<u8>) -> CliResult<()> {
+async fn write_bytes_to(output: Option<&Path>, bytes: Vec<u8>, add_newline: bool) -> CliResult<()> {
     if let Some(path) = output {
         ensure_parent_dirs(path).await?;
         tokio::fs::write(path, bytes)
@@ -56,14 +56,17 @@ async fn write_bytes_to(output: Option<&Path>, bytes: Vec<u8>) -> CliResult<()> 
     std::io::stdout()
         .write_all(&bytes)
         .map_err(|e| CliError::operation_failed("write output", e.to_string()))?;
-    std::io::stdout()
-        .write_all(b"\n")
-        .map_err(|e| CliError::operation_failed("write output", e.to_string()))?;
+    if add_newline {
+        std::io::stdout()
+            .write_all(b"\n")
+            .map_err(|e| CliError::operation_failed("write output", e.to_string()))?;
+    }
     Ok(())
 }
 
 pub async fn write_text(output: Option<&Path>, text: String) -> CliResult<()> {
-    write_bytes_to(output, (text + "\n").into_bytes()).await
+    // Text already includes content; add single newline via write_bytes_to
+    write_bytes_to(output, text.into_bytes(), true).await
 }
 
 pub async fn write_json(output: Option<&Path>, value: &impl serde::Serialize) -> CliResult<()> {
@@ -74,7 +77,8 @@ pub async fn write_json(output: Option<&Path>, value: &impl serde::Serialize) ->
     }
     .map_err(|e| CliError::operation_failed("serialize response", e.to_string()))?;
 
-    write_bytes_to(output, bytes).await
+    // JSON output needs trailing newline for stdout
+    write_bytes_to(output, bytes, true).await
 }
 
 #[cfg(test)]
