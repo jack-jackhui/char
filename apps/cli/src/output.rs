@@ -47,7 +47,11 @@ async fn ensure_parent_dirs(path: &Path) -> CliResult<()> {
 async fn write_bytes_to(output: Option<&Path>, bytes: Vec<u8>, add_newline: bool) -> CliResult<()> {
     if let Some(path) = output {
         ensure_parent_dirs(path).await?;
-        tokio::fs::write(path, bytes)
+        let mut data = bytes;
+        if add_newline {
+            data.push(b'\n');
+        }
+        tokio::fs::write(path, data)
             .await
             .map_err(|e| CliError::operation_failed("write output", e.to_string()))?;
         return Ok(());
@@ -65,7 +69,7 @@ async fn write_bytes_to(output: Option<&Path>, bytes: Vec<u8>, add_newline: bool
 }
 
 pub async fn write_text(output: Option<&Path>, text: String) -> CliResult<()> {
-    // Text already includes content; add single newline via write_bytes_to
+    // Text content; add single trailing newline for POSIX compliance
     write_bytes_to(output, text.into_bytes(), true).await
 }
 
@@ -77,7 +81,7 @@ pub async fn write_json(output: Option<&Path>, value: &impl serde::Serialize) ->
     }
     .map_err(|e| CliError::operation_failed("serialize response", e.to_string()))?;
 
-    // JSON output needs trailing newline for stdout
+    // JSON output needs trailing newline for POSIX compliance
     write_bytes_to(output, bytes, true).await
 }
 
