@@ -34,7 +34,8 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri::plugin::Builder::new(PLUGIN_NAME)
         .invoke_handler(specta_builder.invoke_handler())
         .setup(|app, _api| {
-            let posthog_key = std::env::var("POSTHOG_API_KEY").ok().filter(|v| v.starts_with("phc_"));
+            // Make PostHog optional for personal builds
+            let posthog_key: Option<&str> = option_env!("POSTHOG_API_KEY");
 
             let outlit_key = option_env!("OUTLIT_PUBLIC_KEY");
 

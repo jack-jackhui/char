@@ -4,7 +4,7 @@ import { Volume2Icon, VolumeXIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { commands as analyticsCommands } from "@hypr/plugin-analytics";
-import { commands as sfxCommands } from "@hypr/plugin-sfx";
+// import { commands as sfxCommands } from "@hypr/plugin-sfx";
 
 import { LoginSection } from "./account";
 import { CalendarSection } from "./calendar";
@@ -90,19 +90,21 @@ export function TabContentOnboarding({
     });
   }, [currentStep]);
 
-  useEffect(() => {
-    sfxCommands
-      .play("BGM")
-      .then(() => sfxCommands.setVolume("BGM", 0.2))
-      .catch(console.error);
-    return () => {
-      sfxCommands.stop("BGM").catch(console.error);
-    };
-  }, []);
+  // Disabled: Background music during onboarding
+  // useEffect(() => {
+  //   sfxCommands
+  //     .play("BGM")
+  //     .then(() => sfxCommands.setVolume("BGM", 0.2))
+  //     .catch(console.error);
+  //   return () => {
+  //     sfxCommands.stop("BGM").catch(console.error);
+  //   };
+  // }, []);
 
-  useEffect(() => {
-    sfxCommands.setVolume("BGM", isMuted ? 0 : 0.2).catch(console.error);
-  }, [isMuted]);
+  // Disabled: Volume control for background music
+  // useEffect(() => {
+  //   sfxCommands.setVolume("BGM", isMuted ? 0 : 0.2).catch(console.error);
+  // }, [isMuted]);
 
   useEffect(() => {
     if (onboardingVideoRef.current) {
