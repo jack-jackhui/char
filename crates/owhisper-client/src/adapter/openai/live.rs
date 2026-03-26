@@ -140,7 +140,7 @@ impl RealtimeSttAdapter for OpenAIAdapter {
             Err(e) => {
                 tracing::warn!(
                     error = ?e,
-                    hyprnote.payload.size_bytes = raw.len() as u64,
+                    hyprnote.payload.size_bytes = raw.len() as u64, hyprnote.payload.raw = %raw,
                     "openai_json_parse_failed"
                 );
                 return vec![];
@@ -186,7 +186,7 @@ impl RealtimeSttAdapter for OpenAIAdapter {
                 tracing::debug!(
                     hyprnote.stt.item.id = %item_id,
                     hyprnote.stt.content_index = content_index,
-                    hyprnote.transcript.char_count = transcript.chars().count() as u64,
+                    hyprnote.transcript.char_count = transcript.chars().count() as u64, hyprnote.transcript.text = %transcript,
                     "openai_transcription_completed"
                 );
                 Self::build_transcript_response(&transcript, true, true)
@@ -233,7 +233,7 @@ impl RealtimeSttAdapter for OpenAIAdapter {
             }
             OpenAIEvent::Unknown => {
                 tracing::debug!(
-                    hyprnote.payload.size_bytes = raw.len() as u64,
+                    hyprnote.payload.size_bytes = raw.len() as u64, hyprnote.payload.raw = %raw,
                     "openai_unknown_event"
                 );
                 vec![]
