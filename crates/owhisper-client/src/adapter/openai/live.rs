@@ -446,9 +446,20 @@ impl OpenAIAdapter {
             return vec![];
         }
 
-        let words: Vec<_> = transcript
-            .split_whitespace()
-            .map(|word| WordBuilder::new(word).confidence(1.0).build())
+        // Azure transcription doesn't provide word-level timestamps, so we generate
+        // synthetic ones using current time as base to ensure UI tracks progress
+        let base_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
+        let word_list: Vec<&str> = transcript.split_whitespace().collect();
+        let word_duration = 0.3;
+        let words: Vec<_> = word_list.iter().enumerate()
+            .map(|(i, word)| {
+                let start = base_time + (i as f64 * word_duration);
+                let end = start + word_duration;
+                WordBuilder::new(*word).start(start).end(end).confidence(1.0).build()
+            })
             .collect();
 
         let (start, duration) = calculate_time_span(&words);
