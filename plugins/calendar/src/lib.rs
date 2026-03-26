@@ -58,7 +58,7 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
 fn get_api_base_url() -> String {
     #[cfg(not(debug_assertions))]
     {
-        env!("VITE_API_URL").to_string()
+        option_env!("VITE_API_URL").unwrap_or("https://app.hyprnote.com").to_string()
     }
 
     #[cfg(debug_assertions)]
